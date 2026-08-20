@@ -32,8 +32,8 @@ export interface PluginHostOptions {
    * Builds the per-plugin runtime.
    *
    * @remarks
-   * Injected rather than built here, because this library carries no core submodule: the loader
-   * that does passes core's `createPluginRuntime`.
+   * Injected rather than built here, because this library carries no core submodule: whoever
+   * starts the host passes core's `createPluginRuntime`.
    */
   runtimeFor: (manifest: PluginManifest) => PluginRuntime;
   /** Reads the home. Defaults to {@link readDeployedManifests}, and is replaced in tests. */
@@ -73,14 +73,16 @@ function pluginFrom(candidate: unknown): Plugin | null {
  * Reads a plugin out of an imported entry module.
  *
  * @remarks
- * The module namespace is tried after the default export because a TeaVM-compiled plugin can only
- * ever export `activate` and `deactivate` by name: TeaVM emits named exports and cannot emit an
- * object as a default, so requiring one would reject a Java-authored plugin for a reason unrelated
- * to its correctness.
+ * The module namespace is read only when there is no default export, because a TeaVM-compiled
+ * plugin can only ever export `activate` and `deactivate` by name: TeaVM emits named exports and
+ * cannot emit an object as a default, so requiring one would reject a Java-authored plugin for a
+ * reason unrelated to its correctness. A module that does export a default is judged on that
+ * default alone, so a broken one is rejected rather than papered over by whatever the namespace
+ * happens to expose.
  */
 function asPlugin(module: unknown): Plugin | null {
   const namespace = module as { default?: unknown } | null;
-  return pluginFrom(namespace?.default) ?? pluginFrom(namespace);
+  return namespace?.default === undefined ? pluginFrom(namespace) : pluginFrom(namespace.default);
 }
 
 function detailOf(error: unknown): string {
@@ -319,7 +321,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
   };
 }
 
-/** How long a capability read may take. Matches the graphical dashboard's budget for the same call. */
+/** How long a capability read may take. */
 export const DEFAULT_CALL_TIMEOUT_MS = 10000;
 
 /** How long a capability action may take, since one may do real work such as a multi-file restore. */
