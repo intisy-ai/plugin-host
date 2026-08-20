@@ -55,7 +55,3 @@ function, so the host's config lives wherever that runtime is built, not here.
 `{{ package_name }}` writes no log file of its own. The `PluginRuntime` a plugin receives carries its
 logger, and that runtime is built by whoever starts the host, so the host's logging lives
 wherever that runtime is built, not here.
-
-## License
-
-MIT
