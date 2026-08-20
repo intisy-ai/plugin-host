@@ -3,6 +3,9 @@ import { basename, join } from "node:path";
 import { assertManifest, isPluginError, PluginError } from "@intisy-ai/api";
 import type { PluginManifest } from "@intisy-ai/api";
 
+/** Deploy writes this beside the bundles so Node parses the whole directory as ESM, which is why the name can never be a plugin id. */
+const ESM_MARKER_FILE = "package.json";
+
 /** One plugin as it sits deployed in a home: its manifest sidecar and the bundle beside it. */
 export interface DeployedPlugin {
   /** The validated manifest. */
@@ -61,10 +64,7 @@ export function readDeployedManifests(pluginDir: string): ManifestScan {
   const pendingLoad: Array<{ manifestPath: string; filename: string; manifest: PluginManifest }> = [];
   for (const name of names) {
     if (!name.endsWith(".json")) continue;
-    // Deploy writes this marker for the directory itself, so Node treats every bundle as ESM.
-    // A plugin id of "package" could never deploy its sidecar here: writing it would overwrite
-    // the marker and change how Node parses the whole directory, so the marker owns the name.
-    if (name === "package.json") continue;
+    if (name === ESM_MARKER_FILE) continue;
     const manifestPath = join(pluginDir, name);
     const filename = basename(name, ".json");
     try {
@@ -94,7 +94,6 @@ export function readDeployedManifests(pluginDir: string): ManifestScan {
       ));
       continue;
     }
-    // manifest.id === filename is guaranteed; directory entries are unique; so id collisions are impossible.
     loaded.push({ manifest: item.manifest, manifestPath: item.manifestPath, entryPath: entryFor(pluginDir, item.manifest) });
   }
 

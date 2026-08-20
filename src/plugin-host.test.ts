@@ -162,6 +162,24 @@ describe("startPlugins", () => {
     expect(record).toEqual(["named"]);
   });
 
+  it("quarantines a module whose default export is malformed, ignoring unrelated named exports", async () => {
+    const record: string[] = [];
+    const scan = scanOf({
+      manifest: manifest("misleading"),
+      module: {
+        default: { activate: () => {} },
+        activate: () => { record.push("misleading"); },
+        deactivate: () => {},
+      },
+    });
+    const loaded = await startPlugins(options(scan));
+
+    expect(loaded.started).toEqual([]);
+    expect(loaded.quarantined.map((error) => error.pluginId)).toEqual(["misleading"]);
+    expect(loaded.quarantined[0].fix).toContain("export default");
+    expect(record).toEqual([]);
+  });
+
   it("quarantines a plugin whose runtime cannot be built, and keeps the rest running", async () => {
     const order: string[] = [];
     const scan = scanOf(

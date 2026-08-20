@@ -25,7 +25,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "build": "npm run build:deps && npx tsc && npx tsc --noEmit -p tsconfig.test.json",
@@ -33,10 +33,11 @@
     "test": "npm run build && vitest run",
     "prepublishOnly": "npm run build"
   },
-  "dependencies": {
-    "@intisy-ai/api": "file:api"
+  "peerDependencies": {
+    "@intisy-ai/api": "*"
   },
   "devDependencies": {
+    "@intisy-ai/api": "file:api",
     "@types/node": "^25.9.1",
     "typescript": "^6.0.3",
     "vitest": "^3.2.6"
