@@ -54,6 +54,11 @@ Or as an npm dependency:
 npm install plugin-host
 ```
 
+`plugin-host` takes `@intisy-ai/api` as a peer dependency rather than one of its own, so
+whoever starts the host supplies the single copy both sides share. Two copies would each carry
+their own diagnostic sink and strict-mode flag, and a sink installed on one would never see what
+the other reports.
+
 ## Configuration
 
 `plugin-host` reads no configuration file of its own. `PluginHostOptions.runtimeFor` builds the
