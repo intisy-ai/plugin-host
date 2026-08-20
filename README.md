@@ -6,12 +6,6 @@
 
 Generic ESM plugin host and manifest scanner for the intisy-ai AI-proxy ecosystem.
 
-## Installation
-
-```bash
-npm install plugin-host
-```
-
 Once you have it installed you can use it like so:
 
 `plugin-host` scans a home's deployed plugin manifests, resolves a safe activation order from
@@ -71,10 +65,6 @@ function, so the host's config lives wherever that runtime is built, not here.
 `plugin-host` writes no log file of its own. The `PluginRuntime` a plugin receives carries its
 logger, and that runtime is built by whoever starts the host, so the host's logging lives
 wherever that runtime is built, not here.
-
-## License
-
-MIT
 
 ## License
 
