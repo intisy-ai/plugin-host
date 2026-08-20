@@ -1,1 +1,7 @@
 kind: npm-package
+sections:
+  - title
+  - badges
+  - description
+  - content
+  - license-badge
