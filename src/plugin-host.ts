@@ -62,12 +62,25 @@ export interface LoadedHost {
   stop: () => Promise<void>;
 }
 
-function asPlugin(module: unknown): Plugin | null {
-  const candidate = (module as { default?: unknown })?.default;
+function pluginFrom(candidate: unknown): Plugin | null {
   if (!candidate || typeof candidate !== "object") return null;
   const plugin = candidate as Partial<Plugin>;
   if (typeof plugin.activate !== "function" || typeof plugin.deactivate !== "function") return null;
   return plugin as Plugin;
+}
+
+/**
+ * Reads a plugin out of an imported entry module.
+ *
+ * @remarks
+ * The module namespace is tried after the default export because a TeaVM-compiled plugin can only
+ * ever export `activate` and `deactivate` by name: TeaVM emits named exports and cannot emit an
+ * object as a default, so requiring one would reject a Java-authored plugin for a reason unrelated
+ * to its correctness.
+ */
+function asPlugin(module: unknown): Plugin | null {
+  const namespace = module as { default?: unknown } | null;
+  return pluginFrom(namespace?.default) ?? pluginFrom(namespace);
 }
 
 function detailOf(error: unknown): string {
@@ -242,7 +255,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
       const error = new PluginError(
         pluginId,
         "its entry module exports no plugin",
-        "export default a class implementing Plugin, or definePlugin({ activate, deactivate })",
+        "export default a class implementing Plugin, or definePlugin({ activate, deactivate }), or export activate and deactivate by name",
       );
       quarantine(host, quarantined, manifest, error);
       continue;

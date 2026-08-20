@@ -143,6 +143,25 @@ describe("startPlugins", () => {
     expect(loaded.quarantined[1].fix).toContain("export default");
   });
 
+  it("activates a module that exports activate and deactivate by name, with no default", async () => {
+    const record: string[] = [];
+    const scan = scanOf({
+      manifest: manifest("named"),
+      module: {
+        activate: (ctx: PluginContext) => {
+          record.push("named");
+          ctx.provide("settings", { schema: () => ({}), run: async () => ({ ok: true }) });
+        },
+        deactivate: () => {},
+      },
+    });
+    const loaded = await startPlugins(options(scan));
+
+    expect(loaded.started).toEqual(["named"]);
+    expect(loaded.quarantined).toEqual([]);
+    expect(record).toEqual(["named"]);
+  });
+
   it("quarantines a plugin whose runtime cannot be built, and keeps the rest running", async () => {
     const order: string[] = [];
     const scan = scanOf(
