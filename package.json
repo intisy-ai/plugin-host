@@ -1,0 +1,44 @@
+{
+  "name": "plugin-host",
+  "version": "0.1.0",
+  "description": "Generic ESM plugin host and manifest scanner for the intisy-ai AI-proxy ecosystem.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "license": "MIT",
+  "author": "intisy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/intisy-ai/plugin-host.git"
+  },
+  "keywords": [
+    "intisy-ai",
+    "ai-proxy",
+    "plugin",
+    "host",
+    "manifest",
+    "esm"
+  ],
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "npm run build:deps && npx tsc && npx tsc --noEmit -p tsconfig.test.json",
+    "build:deps": "npm --prefix api install && npm --prefix api run build",
+    "test": "npm run build && vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@intisy-ai/api": "file:api"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.6"
+  }
+}

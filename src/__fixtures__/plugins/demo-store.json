@@ -1,0 +1,9 @@
+{
+  "id": "demo-store",
+  "api": 1,
+  "entry": "dist/index.js",
+  "displayName": "Demo Store",
+  "capabilities": ["settings"],
+  "services": { "provides": ["demo-store:items"] },
+  "permissions": ["network"]
+}

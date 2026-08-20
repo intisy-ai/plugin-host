@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.idea/
+*.log
+package-lock.json
+.superpowers/
+docs/
+graphify-out/
