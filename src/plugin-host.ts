@@ -284,7 +284,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
       const error = pluginError(
         pluginId,
         "its entry module exports no plugin",
-        "export default a class implementing Plugin, or definePlugin({ activate, deactivate }), or export activate and deactivate by name",
+        "export default an object or class implementing Plugin, or export activate and deactivate by name",
       );
       quarantine(host, quarantined, manifest, error);
       continue;
