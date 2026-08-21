@@ -9,4 +9,4 @@ export {
 } from "./plugin-host.js";
 export type { CapabilityCall, LoadedHost, PluginHostFacade, PluginHostOptions, PluginLedgerRow } from "./plugin-host.js";
 export { readDeployedManifests } from "./plugin-manifests.js";
-export type { DeployedPlugin, ManifestScan } from "./plugin-manifests.js";
+export type { DeployedPlugin, ManifestScan, VocabularyEntry } from "./plugin-manifests.js";

@@ -1,12 +1,27 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { WELL_KNOWN_SERVICES } from "@intisy-ai/api";
 import { assertManifest, isPluginError, pluginError } from "@intisy-ai/api/engine";
 import type { PluginErrorShape } from "@intisy-ai/api/engine";
 import type { PluginManifest } from "@intisy-ai/api";
 
 /** Deploy writes this beside the bundles so Node parses the whole directory as ESM, which is why the name can never be a plugin id. */
 const ESM_MARKER_FILE = "package.json";
+
+/**
+ * One entry of a declared vocabulary, which is the shape every typed key already has.
+ *
+ * @remarks
+ * Declared structurally rather than imported so this library takes no api runtime value: a caller
+ * passes the keys it owns, whether they come from core-contracts, core-ir or its own module.
+ */
+export interface VocabularyEntry {
+  id: string;
+}
+
+/** @internal */
+export function ids(entries: ReadonlyArray<VocabularyEntry> | undefined): string[] {
+  return entries === undefined ? [] : entries.map((entry) => entry.id);
+}
 
 /** One plugin as it sits deployed in a home: its manifest sidecar and the bundle beside it. */
 export interface DeployedPlugin {
@@ -42,8 +57,10 @@ function entryFor(pluginDir: string, manifest: PluginManifest): string | null {
  * is a host nobody can diagnose.
  *
  * @param pluginDir - the home's plugin directory, normally `<home>/plugin`
+ * @param wellKnownServices - bare service ids any plugin may provide, none by default, so a host
+ * that names none treats every bare id as squatting
  */
-export function readDeployedManifests(pluginDir: string): ManifestScan {
+export function readDeployedManifests(pluginDir: string, wellKnownServices?: ReadonlyArray<VocabularyEntry>): ManifestScan {
   let loaded: DeployedPlugin[] = [];
   const failed: PluginErrorShape[] = [];
 
@@ -70,7 +87,7 @@ export function readDeployedManifests(pluginDir: string): ManifestScan {
     const manifestPath = join(pluginDir, name);
     const filename = basename(name, ".json");
     try {
-      const manifest = assertManifest(JSON.parse(readFileSync(manifestPath, "utf-8")), [...WELL_KNOWN_SERVICES]) as PluginManifest;
+      const manifest = assertManifest(JSON.parse(readFileSync(manifestPath, "utf-8")), ids(wellKnownServices)) as PluginManifest;
       pendingLoad.push({ manifestPath, filename, manifest });
     } catch (error) {
       let detail: string;

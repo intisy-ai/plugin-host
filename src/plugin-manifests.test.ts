@@ -122,12 +122,21 @@ describe("readDeployedManifests", () => {
     expect(scan.failed[0].detail).toContain("demo");
   });
 
-  it("loads a manifest that provides a well-known service, rather than quarantining it as squatting", () => {
+  it("loads a manifest that provides a well-known service the caller named, rather than quarantining it as squatting", () => {
+    const dir = home();
+    write(dir, "accounts-provider", { id: "accounts-provider", api: 1, entry: "dist/index.js", capabilities: [], services: { provides: ["accounts"] } });
+    const scan = readDeployedManifests(dir, [{ id: "accounts" }]);
+    expect(scan.failed).toEqual([]);
+    expect(scan.loaded.map((plugin) => plugin.manifest.id)).toEqual(["accounts-provider"]);
+  });
+
+  it("quarantines the same bare provide when the caller names no vocabulary", () => {
     const dir = home();
     write(dir, "accounts-provider", { id: "accounts-provider", api: 1, entry: "dist/index.js", capabilities: [], services: { provides: ["accounts"] } });
     const scan = readDeployedManifests(dir);
-    expect(scan.failed).toEqual([]);
-    expect(scan.loaded.map((plugin) => plugin.manifest.id)).toEqual(["accounts-provider"]);
+    expect(scan.loaded).toEqual([]);
+    expect(scan.failed).toHaveLength(1);
+    expect(scan.failed[0].detail).toContain("accounts");
   });
 
   it("reports when a manifest id does not match another plugin and allows only valid ones", () => {

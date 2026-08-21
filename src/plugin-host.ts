@@ -1,9 +1,9 @@
 import { pathToFileURL } from "node:url";
-import { CAPABILITY_IDS, reportDiagnostic, WELL_KNOWN_SERVICES } from "@intisy-ai/api";
-import { activationOrder, createPluginHost, isPluginError, pluginError, setDiagnosticSink } from "@intisy-ai/api/engine";
+import { activationOrder, createPluginHost, isPluginError, pluginError } from "@intisy-ai/api/engine";
 import type { HostSurface, PluginErrorShape } from "@intisy-ai/api/engine";
 import type { Plugin, PluginContext, PluginHost, PluginManifest, PluginRuntime } from "@intisy-ai/api";
-import { readDeployedManifests } from "./plugin-manifests.js";
+import { ids, readDeployedManifests } from "./plugin-manifests.js";
+import type { VocabularyEntry } from "./plugin-manifests.js";
 import type { DeployedPlugin, ManifestScan } from "./plugin-manifests.js";
 
 /** How long one plugin's `activate` may take before it is quarantined. */
@@ -26,6 +26,23 @@ export interface PluginHostOptions {
   pluginDir: string;
   /** Surface ids this host renders. */
   surfaces?: string[];
+  /**
+   * The capability categories this host understands.
+   *
+   * @remarks
+   * Absent means unverifiable, not empty: a host that declares nothing gets no diagnostics rather
+   * than having every id it was handed called unknown. Pass the typed keys of whatever this host
+   * actually renders, which is what turns the check into "does THIS host understand it".
+   */
+  vocabulary?: ReadonlyArray<VocabularyEntry>;
+  /**
+   * The bare service ids any plugin may register, beyond ids namespaced by the registering plugin.
+   *
+   * @remarks
+   * Absent means an empty vocabulary here, the opposite of {@link vocabulary}, because a bare id
+   * claims a shared contract and a host that names none is saying no such contract exists.
+   */
+  wellKnownServices?: ReadonlyArray<VocabularyEntry>;
   /** How long one `activate` may take. Defaults to {@link DEFAULT_ACTIVATE_TIMEOUT_MS}. */
   activateTimeoutMs?: number;
   /** How long one `deactivate` may take. Defaults to {@link DEFAULT_DEACTIVATE_TIMEOUT_MS}. */
@@ -214,14 +231,13 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
   const timeoutMs = options.activateTimeoutMs ?? DEFAULT_ACTIVATE_TIMEOUT_MS;
   const stopMs = options.deactivateTimeoutMs ?? DEFAULT_DEACTIVATE_TIMEOUT_MS;
   const importEntry = options.importEntry ?? (async (entryPath: string) => import(pathToFileURL(entryPath).href));
-  const scan = options.scan ?? readDeployedManifests(options.pluginDir);
+  const scan = options.scan ?? readDeployedManifests(options.pluginDir, options.wellKnownServices);
 
-  setDiagnosticSink(reportDiagnostic);
   const host = createPluginHost({
     app: options.app,
     surfaces: options.surfaces ?? [],
-    vocabulary: [...CAPABILITY_IDS],
-    wellKnownServices: [...WELL_KNOWN_SERVICES],
+    vocabulary: ids(options.vocabulary),
+    wellKnownServices: ids(options.wellKnownServices),
   });
   const quarantined: PluginErrorShape[] = [];
   const started: string[] = [];

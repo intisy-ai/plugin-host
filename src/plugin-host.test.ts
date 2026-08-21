@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { pluginError, setDiagnosticSink as setEngineDiagnosticSink } from "@intisy-ai/api/engine";
-import { setDiagnosticSink } from "@intisy-ai/api";
 import type { Plugin, PluginContext, PluginManifest, PluginRuntime } from "@intisy-ai/api";
 import { callCapability, ledgerRows, startPlugins } from "./plugin-host.js";
 
@@ -328,7 +327,7 @@ describe("startPlugins", () => {
 
   it("refuses a service a plugin registers after its quarantine", async () => {
     const reported: string[] = [];
-    setDiagnosticSink((message) => reported.push(message));
+    setEngineDiagnosticSink((message) => reported.push(message));
     let release: () => void = () => {};
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const scan = scanOf({
@@ -348,12 +347,50 @@ describe("startPlugins", () => {
 
     expect(loaded.host.service("late:store")).toBeUndefined();
     expect(reported.some((message) => message.includes("late:store"))).toBe(true);
-    setDiagnosticSink(null);
+    setEngineDiagnosticSink(null);
   });
 
-  it("reunites the engine's diagnostic channel with api's own setDiagnosticSink", async () => {
+  it("warns about a capability the vocabulary this host declared does not carry", async () => {
     const reported: string[] = [];
-    setDiagnosticSink((message) => reported.push(message));
+    setEngineDiagnosticSink((message) => reported.push(message));
+    const scan = scanOf({
+      manifest: manifest("odd", { capabilities: ["mystery"] }),
+      module: {
+        default: {
+          activate: (ctx: PluginContext) => ctx.provide("mystery", {}),
+          deactivate: () => {},
+        },
+      },
+    });
+
+    await startPlugins(options(scan, { vocabulary: [{ id: "settings" }] }));
+
+    expect(reported.some((message) => message.includes('unknown capability "mystery"'))).toBe(true);
+    setEngineDiagnosticSink(null);
+  });
+
+  it("says nothing about a capability the host declared", async () => {
+    const reported: string[] = [];
+    setEngineDiagnosticSink((message) => reported.push(message));
+    const scan = scanOf({
+      manifest: manifest("odd", { capabilities: ["mystery"] }),
+      module: {
+        default: {
+          activate: (ctx: PluginContext) => ctx.provide("mystery", {}),
+          deactivate: () => {},
+        },
+      },
+    });
+
+    await startPlugins(options(scan, { vocabulary: [{ id: "settings" }, { id: "mystery" }] }));
+
+    expect(reported.join("\n")).not.toContain("mystery");
+    setEngineDiagnosticSink(null);
+  });
+
+  it("treats an absent vocabulary as unverifiable rather than unknown", async () => {
+    const reported: string[] = [];
+    setEngineDiagnosticSink((message) => reported.push(message));
     const scan = scanOf({
       manifest: manifest("odd", { capabilities: ["mystery"] }),
       module: {
@@ -366,8 +403,7 @@ describe("startPlugins", () => {
 
     await startPlugins(options(scan));
 
-    expect(reported.some((message) => message.includes('unknown capability "mystery"'))).toBe(true);
-    setDiagnosticSink(null);
+    expect(reported.join("\n")).not.toContain("mystery");
     setEngineDiagnosticSink(null);
   });
 
