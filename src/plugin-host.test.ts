@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { pluginError, setDiagnosticSink } from "@intisy-ai/api/engine";
+import { pluginError, setDiagnosticSink as setEngineDiagnosticSink } from "@intisy-ai/api/engine";
+import { setDiagnosticSink } from "@intisy-ai/api";
 import type { Plugin, PluginContext, PluginManifest, PluginRuntime } from "@intisy-ai/api";
 import { callCapability, ledgerRows, startPlugins } from "./plugin-host.js";
 
@@ -348,6 +349,26 @@ describe("startPlugins", () => {
     expect(loaded.host.service("late:store")).toBeUndefined();
     expect(reported.some((message) => message.includes("late:store"))).toBe(true);
     setDiagnosticSink(null);
+  });
+
+  it("reunites the engine's diagnostic channel with api's own setDiagnosticSink", async () => {
+    const reported: string[] = [];
+    setDiagnosticSink((message) => reported.push(message));
+    const scan = scanOf({
+      manifest: manifest("odd", { capabilities: ["mystery"] }),
+      module: {
+        default: {
+          activate: (ctx: PluginContext) => ctx.provide("mystery", {}),
+          deactivate: () => {},
+        },
+      },
+    });
+
+    await startPlugins(options(scan));
+
+    expect(reported.some((message) => message.includes('unknown capability "mystery"'))).toBe(true);
+    setDiagnosticSink(null);
+    setEngineDiagnosticSink(null);
   });
 
   it("bounds each deactivate on stop, so one hanging plugin does not block the rest", async () => {

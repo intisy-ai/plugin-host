@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { CAPABILITY_IDS, WELL_KNOWN_SERVICES } from "@intisy-ai/api";
-import { activationOrder, createPluginHost, isPluginError, pluginError } from "@intisy-ai/api/engine";
+import { CAPABILITY_IDS, reportDiagnostic, WELL_KNOWN_SERVICES } from "@intisy-ai/api";
+import { activationOrder, createPluginHost, isPluginError, pluginError, setDiagnosticSink } from "@intisy-ai/api/engine";
 import type { HostSurface, PluginErrorShape } from "@intisy-ai/api/engine";
 import type { Plugin, PluginContext, PluginHost, PluginManifest, PluginRuntime } from "@intisy-ai/api";
 import { readDeployedManifests } from "./plugin-manifests.js";
@@ -216,6 +216,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
   const importEntry = options.importEntry ?? (async (entryPath: string) => import(pathToFileURL(entryPath).href));
   const scan = options.scan ?? readDeployedManifests(options.pluginDir);
 
+  setDiagnosticSink(reportDiagnostic);
   const host = createPluginHost({
     app: options.app,
     surfaces: options.surfaces ?? [],
