@@ -63,6 +63,13 @@ describe("startPlugins", () => {
     expect(loaded.host.ledger.entry("demo")?.status).toBe("active");
   });
 
+  it("reports the descriptor's api as 2, the engine's own version, not api root's API_VERSION of 1", async () => {
+    const scan = scanOf({ manifest: manifest("demo"), module: settingsPlugin([], "demo") });
+    const loaded = await startPlugins(options(scan));
+
+    expect(loaded.host.descriptor).toEqual({ app: "test", api: 2, surfaces: [] });
+  });
+
   it("activates a service provider before its consumer", async () => {
     const order: string[] = [];
     const scan = scanOf(

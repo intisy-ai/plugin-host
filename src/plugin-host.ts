@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 import { CAPABILITY_IDS, WELL_KNOWN_SERVICES } from "@intisy-ai/api";
 import { activationOrder, createPluginHost, isPluginError, pluginError } from "@intisy-ai/api/engine";
 import type { HostSurface, PluginErrorShape } from "@intisy-ai/api/engine";
-import type { CapabilityMap, CapabilityRecord, Plugin, PluginContext, PluginManifest, PluginRuntime } from "@intisy-ai/api";
+import type { Plugin, PluginContext, PluginHost, PluginManifest, PluginRuntime } from "@intisy-ai/api";
 import { readDeployedManifests } from "./plugin-manifests.js";
 import type { DeployedPlugin, ManifestScan } from "./plugin-manifests.js";
 
@@ -45,16 +45,16 @@ export interface PluginHostOptions {
 }
 
 /**
- * The engine's host surface, re-typed so `capability` looks up by the api's own vocabulary.
+ * The engine's host surface, re-typed so `capability` and `service` look up by the api's own
+ * vocabulary.
  *
  * @remarks
- * The engine mints no capability vocabulary, so its generated `capability` takes a bare string.
- * This package owns `CapabilityMap`, so it restores the typed lookup here rather than losing it.
+ * The engine mints neither vocabulary, so its generated `capability` and `service` take a bare
+ * string. This package owns `CapabilityMap` and `ServiceMap` through api's `PluginHost`, so both
+ * typed overloads are picked from there rather than hand-copied, which would drift the day api
+ * adds a third.
  */
-export type PluginHostFacade = Omit<HostSurface, "capability"> & {
-  capability<K extends keyof CapabilityMap>(id: K): CapabilityRecord<CapabilityMap[K]>[];
-  capability(id: string): CapabilityRecord<unknown>[];
-};
+export type PluginHostFacade = Omit<HostSurface, "capability" | "service"> & Pick<PluginHost, "capability" | "service">;
 
 /** A running host: what started, what did not, and how to shut it down. */
 export interface LoadedHost {
