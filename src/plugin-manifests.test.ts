@@ -122,6 +122,14 @@ describe("readDeployedManifests", () => {
     expect(scan.failed[0].detail).toContain("demo");
   });
 
+  it("loads a manifest that provides a well-known service, rather than quarantining it as squatting", () => {
+    const dir = home();
+    write(dir, "accounts-provider", { id: "accounts-provider", api: 1, entry: "dist/index.js", capabilities: [], services: { provides: ["accounts"] } });
+    const scan = readDeployedManifests(dir);
+    expect(scan.failed).toEqual([]);
+    expect(scan.loaded.map((plugin) => plugin.manifest.id)).toEqual(["accounts-provider"]);
+  });
+
   it("reports when a manifest id does not match another plugin and allows only valid ones", () => {
     const dir = home();
     write(dir, "good1", { id: "good1", api: 1, entry: "dist/index.js", capabilities: ["settings"] });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PluginError, setDiagnosticSink } from "@intisy-ai/api";
+import { pluginError, setDiagnosticSink } from "@intisy-ai/api/engine";
 import type { Plugin, PluginContext, PluginManifest, PluginRuntime } from "@intisy-ai/api";
 import { callCapability, ledgerRows, startPlugins } from "./plugin-host.js";
 
@@ -214,7 +214,7 @@ describe("startPlugins", () => {
   it("records a manifest that failed to read in the ledger as well as the quarantine list", async () => {
     const loaded = await startPlugins(options({
       loaded: [],
-      failed: [new PluginError("bad", "unreadable", "redeploy it")],
+      failed: [pluginError("bad", "unreadable", "redeploy it")],
       modules: new Map(),
     } as never));
 
@@ -231,7 +231,7 @@ describe("startPlugins", () => {
           default: {
             activate: (ctx: PluginContext) => {
               ctx.services.register("store:api", {
-                open: () => { throw new PluginError("store", "the store is closed", "start the store first"); },
+                open: () => { throw pluginError("store", "the store is closed", "start the store first"); },
               });
             },
             deactivate: () => {},
@@ -479,7 +479,7 @@ describe("ledgerRows", () => {
       { manifest: manifest("consumer", { capabilities: [], services: { consumes: ["provider:store"] } }), module: { default: { activate: (ctx: PluginContext) => { ctx.services.get("provider:store"); }, deactivate: () => {} } } },
     );
     const loaded = await startPlugins(options(scan));
-    await loaded.host.markBroken("provider", new (await import("@intisy-ai/api")).PluginError("provider", "stopped", "restart it"));
+    await loaded.host.markBroken("provider", (await import("@intisy-ai/api/engine")).pluginError("provider", "stopped", "restart it"));
     const rows = ledgerRows(loaded);
     const consumerRow = rows.find((row) => row.pluginId === "consumer")!;
 

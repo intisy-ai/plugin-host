@@ -1,6 +1,8 @@
 import { pathToFileURL } from "node:url";
-import { activationOrder, createPluginHost, isPluginError, PluginError } from "@intisy-ai/api";
-import type { Plugin, PluginContext, PluginHost, PluginManifest, PluginRuntime } from "@intisy-ai/api";
+import { CAPABILITY_IDS, WELL_KNOWN_SERVICES } from "@intisy-ai/api";
+import { activationOrder, createPluginHost, isPluginError, pluginError } from "@intisy-ai/api/engine";
+import type { HostSurface, PluginErrorShape } from "@intisy-ai/api/engine";
+import type { CapabilityMap, CapabilityRecord, Plugin, PluginContext, PluginManifest, PluginRuntime } from "@intisy-ai/api";
 import { readDeployedManifests } from "./plugin-manifests.js";
 import type { DeployedPlugin, ManifestScan } from "./plugin-manifests.js";
 
@@ -42,14 +44,26 @@ export interface PluginHostOptions {
   importEntry?: (entryPath: string) => Promise<unknown>;
 }
 
+/**
+ * The engine's host surface, re-typed so `capability` looks up by the api's own vocabulary.
+ *
+ * @remarks
+ * The engine mints no capability vocabulary, so its generated `capability` takes a bare string.
+ * This package owns `CapabilityMap`, so it restores the typed lookup here rather than losing it.
+ */
+export type PluginHostFacade = Omit<HostSurface, "capability"> & {
+  capability<K extends keyof CapabilityMap>(id: K): CapabilityRecord<CapabilityMap[K]>[];
+  capability(id: string): CapabilityRecord<unknown>[];
+};
+
 /** A running host: what started, what did not, and how to shut it down. */
 export interface LoadedHost {
   /** The api package's host, which owns the capabilities, the services and the ledger. */
-  host: PluginHost;
+  host: PluginHostFacade;
   /** Plugin ids that activated cleanly, in activation order. */
   started: string[];
   /** One error per plugin that could not be loaded, each naming the plugin and the fix. */
-  quarantined: PluginError[];
+  quarantined: PluginErrorShape[];
   /** Every plugin whose manifest validated, as the scan found it on disk. */
   deployed: DeployedPlugin[];
   /**
@@ -86,7 +100,10 @@ function asPlugin(module: unknown): Plugin | null {
 }
 
 function detailOf(error: unknown): string {
-  if (isPluginError(error) && error.detail) return error.detail;
+  if (isPluginError(error)) {
+    const detail = (error as PluginErrorShape).detail;
+    if (detail) return detail;
+  }
   const message = (error as { message?: unknown } | null)?.message;
   return typeof message === "string" && message ? message : String(error);
 }
@@ -95,13 +112,13 @@ function detailOf(error: unknown): string {
  * Attributes a caught failure to the plugin the host was calling.
  *
  * @remarks
- * A caught {@link PluginError} carries whatever `pluginId` its thrower chose, and the thrower may
- * be another plugin's service. Its detail and fix are worth keeping, its attribution is not: the
- * quarantine belongs to the plugin whose call failed.
+ * A caught {@link PluginErrorShape} carries whatever `pluginId` its thrower chose, and the thrower
+ * may be another plugin's service. Its detail and fix are worth keeping, its attribution is not:
+ * the quarantine belongs to the plugin whose call failed.
  */
-function errorFor(pluginId: string, error: unknown, fix: string): PluginError {
-  const carried = isPluginError(error) && error.fix ? error.fix : fix;
-  return new PluginError(pluginId, detailOf(error), carried);
+function errorFor(pluginId: string, error: unknown, fix: string): PluginErrorShape {
+  const carried = isPluginError(error) && (error as PluginErrorShape).fix ? (error as PluginErrorShape).fix : fix;
+  return pluginError(pluginId, detailOf(error), carried);
 }
 
 /**
@@ -114,7 +131,7 @@ function errorFor(pluginId: string, error: unknown, fix: string): PluginError {
  * `recordDeclared` resets status to `activating` and clears any error, and reversing the order
  * would silently undo the quarantine.
  */
-function quarantine(host: PluginHost, quarantined: PluginError[], manifest: PluginManifest, error: PluginError): void {
+function quarantine(host: HostSurface, quarantined: PluginErrorShape[], manifest: PluginManifest, error: PluginErrorShape): void {
   host.ledger.recordDeclared(manifest);
   host.markBroken(manifest.id, error);
   quarantined.push(error);
@@ -129,7 +146,7 @@ async function callWithDeadline<T>(
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const expiry = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new PluginError(pluginId, detail, fix)), timeoutMs);
+    timer = setTimeout(() => reject(pluginError(pluginId, detail, fix)), timeoutMs);
   });
   try {
     return await Promise.race([Promise.resolve().then(work), expiry]);
@@ -199,8 +216,13 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
   const importEntry = options.importEntry ?? (async (entryPath: string) => import(pathToFileURL(entryPath).href));
   const scan = options.scan ?? readDeployedManifests(options.pluginDir);
 
-  const host = createPluginHost({ app: options.app, surfaces: options.surfaces ?? [] });
-  const quarantined: PluginError[] = [];
+  const host = createPluginHost({
+    app: options.app,
+    surfaces: options.surfaces ?? [],
+    vocabulary: [...CAPABILITY_IDS],
+    wellKnownServices: [...WELL_KNOWN_SERVICES],
+  });
+  const quarantined: PluginErrorShape[] = [];
   const started: string[] = [];
   const plugins = new Map<string, Plugin>();
   const byId = new Map<string, DeployedPlugin>(scan.loaded.map((plugin) => [plugin.manifest.id, plugin]));
@@ -215,7 +237,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
     for (const pluginId of cycle) {
       const manifest = byId.get(pluginId)?.manifest;
       if (!manifest) continue;
-      quarantine(host, quarantined, manifest, new PluginError(
+      quarantine(host, quarantined, manifest, pluginError(
         pluginId,
         `is in a dependency cycle: ${cycle.join(" -> ")} -> ${cycle[0]}`,
         "break the cycle by removing one plugin's entry from services.consumes in its plugin.json",
@@ -235,7 +257,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
     }
 
     if (!entryPath) {
-      const error = new PluginError(
+      const error = pluginError(
         pluginId,
         manifest.entry ? "declares an entry but no bundle is deployed beside its manifest" : "declares no entry, so there is nothing to activate",
         manifest.entry ? "deploy the plugin again so its bundle lands beside the sidecar" : "add \"entry\": \"dist/index.js\" to plugin.json if this plugin has capabilities",
@@ -254,7 +276,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
     }
 
     if (!plugin) {
-      const error = new PluginError(
+      const error = pluginError(
         pluginId,
         "its entry module exports no plugin",
         "export default a class implementing Plugin, or definePlugin({ activate, deactivate }), or export activate and deactivate by name",
@@ -265,7 +287,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
 
     let context: PluginContext;
     try {
-      context = host.contextFor(manifest, options.runtimeFor(manifest));
+      context = host.contextFor(manifest, options.runtimeFor(manifest)) as unknown as PluginContext;
     } catch (error) {
       const failure = errorFor(pluginId, error, "fix the plugin's own configuration; its runtime could not be built");
       quarantine(host, quarantined, manifest, failure);
@@ -310,7 +332,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
 
   let shutdown: Promise<void> | null = null;
   return {
-    host,
+    host: host as unknown as PluginHostFacade,
     started,
     quarantined,
     deployed: scan.loaded,
@@ -328,7 +350,7 @@ export const DEFAULT_CALL_TIMEOUT_MS = 10000;
 export const DEFAULT_INVOKE_TIMEOUT_MS = 600000;
 
 /** What one bounded capability call produced. */
-export type CapabilityCall<T> = { ok: true; value: T } | { ok: false; error: PluginError };
+export type CapabilityCall<T> = { ok: true; value: T } | { ok: false; error: PluginErrorShape };
 
 /**
  * Calls into a plugin with a deadline.

@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { assertManifest, isPluginError, PluginError } from "@intisy-ai/api";
+import { WELL_KNOWN_SERVICES } from "@intisy-ai/api";
+import { assertManifest, isPluginError, pluginError } from "@intisy-ai/api/engine";
+import type { PluginErrorShape } from "@intisy-ai/api/engine";
 import type { PluginManifest } from "@intisy-ai/api";
 
 /** Deploy writes this beside the bundles so Node parses the whole directory as ESM, which is why the name can never be a plugin id. */
@@ -21,7 +23,7 @@ export interface ManifestScan {
   /** Every plugin whose manifest validated, ordered by id. */
   loaded: DeployedPlugin[];
   /** One error per sidecar that could not be read or did not validate. */
-  failed: PluginError[];
+  failed: PluginErrorShape[];
 }
 
 function entryFor(pluginDir: string, manifest: PluginManifest): string | null {
@@ -43,7 +45,7 @@ function entryFor(pluginDir: string, manifest: PluginManifest): string | null {
  */
 export function readDeployedManifests(pluginDir: string): ManifestScan {
   let loaded: DeployedPlugin[] = [];
-  const failed: PluginError[] = [];
+  const failed: PluginErrorShape[] = [];
 
   let names: string[];
   try {
@@ -53,7 +55,7 @@ export function readDeployedManifests(pluginDir: string): ManifestScan {
     if (err.code === "ENOENT") {
       return { loaded, failed };
     }
-    failed.push(new PluginError(
+    failed.push(pluginError(
       "plugin-dir",
       `Plugin directory ${pluginDir} is not accessible: ${String(error)}`,
       "ensure the directory exists and is readable"
@@ -68,26 +70,26 @@ export function readDeployedManifests(pluginDir: string): ManifestScan {
     const manifestPath = join(pluginDir, name);
     const filename = basename(name, ".json");
     try {
-      const manifest = assertManifest(JSON.parse(readFileSync(manifestPath, "utf-8")));
+      const manifest = assertManifest(JSON.parse(readFileSync(manifestPath, "utf-8")), [...WELL_KNOWN_SERVICES]) as PluginManifest;
       pendingLoad.push({ manifestPath, filename, manifest });
     } catch (error) {
       let detail: string;
       let fix: string;
       if (isPluginError(error)) {
-        const apiError = error as PluginError;
+        const apiError = error as PluginErrorShape;
         detail = `${manifestPath}: ${apiError.detail}`;
         fix = apiError.fix;
       } else {
         detail = `${manifestPath} is not readable as JSON: ${String(error)}`;
         fix = "redeploy the plugin so its plugin.json sidecar is written again";
       }
-      failed.push(new PluginError(filename, detail, fix));
+      failed.push(pluginError(filename, detail, fix));
     }
   }
 
   for (const item of pendingLoad) {
     if (item.manifest.id !== item.filename) {
-      failed.push(new PluginError(
+      failed.push(pluginError(
         item.filename,
         `${item.manifestPath}: plugin id "${item.manifest.id}" does not match filename "${item.filename}.json"`,
         "redeploy the plugin so the sidecar and bundle filenames match the declared id"
