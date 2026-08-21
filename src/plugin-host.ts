@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { activationOrder, createPluginHost, isPluginError, pluginError } from "@intisy-ai/api/engine";
-import type { HostSurface, PluginErrorShape } from "@intisy-ai/api/engine";
-import type { Plugin, PluginContext, PluginHost, PluginManifest, PluginRuntime } from "@intisy-ai/api";
+import type { HostSurface, PluginErrorShape, PluginRuntimeShape } from "@intisy-ai/api/engine";
+import type { Plugin, PluginContext, PluginManifest } from "@intisy-ai/api";
 import { ids, readDeployedManifests } from "./plugin-manifests.js";
 import type { VocabularyEntry } from "./plugin-manifests.js";
 import type { DeployedPlugin, ManifestScan } from "./plugin-manifests.js";
@@ -54,29 +54,17 @@ export interface PluginHostOptions {
    * Injected rather than built here, because this library carries no core submodule: whoever
    * starts the host passes core's `createPluginRuntime`.
    */
-  runtimeFor: (manifest: PluginManifest) => PluginRuntime;
+  runtimeFor: (manifest: PluginManifest) => PluginRuntimeShape;
   /** Reads the home. Defaults to {@link readDeployedManifests}, and is replaced in tests. */
   scan?: ManifestScan;
   /** Imports one entry module. Defaults to a dynamic import, and is replaced in tests. */
   importEntry?: (entryPath: string) => Promise<unknown>;
 }
 
-/**
- * The engine's host surface, re-typed so `capability` and `service` look up by the api's own
- * vocabulary.
- *
- * @remarks
- * The engine mints neither vocabulary, so its generated `capability` and `service` take a bare
- * string. This package owns `CapabilityMap` and `ServiceMap` through api's `PluginHost`, so both
- * typed overloads are picked from there rather than hand-copied, which would drift the day api
- * adds a third.
- */
-export type PluginHostFacade = Omit<HostSurface, "capability" | "service"> & Pick<PluginHost, "capability" | "service">;
-
 /** A running host: what started, what did not, and how to shut it down. */
 export interface LoadedHost {
-  /** The api package's host, which owns the capabilities, the services and the ledger. */
-  host: PluginHostFacade;
+  /** The engine's host, which owns the capabilities, the services and the ledger. */
+  host: HostSurface;
   /** Plugin ids that activated cleanly, in activation order. */
   started: string[];
   /** One error per plugin that could not be loaded, each naming the plugin and the fix. */
@@ -349,7 +337,7 @@ export async function startPlugins(options: PluginHostOptions): Promise<LoadedHo
 
   let shutdown: Promise<void> | null = null;
   return {
-    host: host as unknown as PluginHostFacade,
+    host,
     started,
     quarantined,
     deployed: scan.loaded,

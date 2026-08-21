@@ -2,8 +2,26 @@ import { cpSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { CommandsCapability, PluginManifest, PluginRuntime, SettingsCapability } from "@intisy-ai/api";
+import type { PluginRuntimeShape } from "@intisy-ai/api/engine";
+import type { PluginManifest } from "@intisy-ai/api";
 import { callCapability, DEFAULT_CALL_TIMEOUT_MS, ledgerRows, startPlugins } from "./plugin-host.js";
+
+/**
+ * What the fixture plugins in `__fixtures__` provide, declared locally on purpose.
+ *
+ * @remarks
+ * The real `settings` and `commands` contracts belong to the library that mints those ids, which
+ * sits above this one and must not be imported here. Only the fixtures' own shape is asserted, so
+ * the fixtures' own shape is what this declares.
+ */
+interface FixtureSettings {
+  schema(): { fields: { key: string; type: string; label: string }[] };
+  run(actionId: string): Promise<{ ok: boolean; message?: string }>;
+}
+
+interface FixtureCommands {
+  commands(): Promise<{ name: string; description: string }[]> | { name: string; description: string }[];
+}
 
 const FIXTURES = join(import.meta.dirname, "__fixtures__", "plugins");
 
@@ -15,7 +33,7 @@ function deployedHome(): string {
   return pluginDir;
 }
 
-function runtimeFor(_manifest: PluginManifest): PluginRuntime {
+function runtimeFor(_manifest: PluginManifest): PluginRuntimeShape {
   return {
     config: { all: () => ({}), get: () => undefined, set: async () => {} },
     log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
@@ -35,15 +53,15 @@ describe("loading a manifest-declared plugin end to end", () => {
   it("hands the host every implementation, attributed to its plugin", async () => {
     const loaded = await startPlugins({ app: "test", pluginDir: deployedHome(), runtimeFor });
 
-    const [settings] = loaded.host.capability<"settings">("settings");
+    const [settings] = loaded.host.capability("settings");
     expect(settings.pluginId).toBe("demo-store");
-    expect((settings.implementation as SettingsCapability).schema()).toEqual({
+    expect((settings.implementation as FixtureSettings).schema()).toEqual({
       fields: [{ key: "limit", type: "number", label: "Limit" }],
     });
 
-    const [commands] = loaded.host.capability<"commands">("commands");
+    const [commands] = loaded.host.capability("commands");
     expect(commands.pluginId).toBe("demo-reader");
-    expect(await (commands.implementation as CommandsCapability).commands()).toEqual([
+    expect(await (commands.implementation as FixtureCommands).commands()).toEqual([
       { name: "demo", description: "demo over 2 items" },
     ]);
   });
@@ -72,9 +90,9 @@ describe("loading a manifest-declared plugin end to end", () => {
 
   it("runs a declared action through the bounded call path", async () => {
     const loaded = await startPlugins({ app: "test", pluginDir: deployedHome(), runtimeFor });
-    const [settings] = loaded.host.capability<"settings">("settings");
+    const [settings] = loaded.host.capability("settings");
     const result = await callCapability(settings.pluginId, "settings.run", DEFAULT_CALL_TIMEOUT_MS,
-      () => (settings.implementation as SettingsCapability).run("refresh"));
+      () => (settings.implementation as FixtureSettings).run("refresh"));
 
     expect(result).toEqual({ ok: true, value: { ok: true, message: "refresh" } });
   });
