@@ -28,6 +28,8 @@ jobs:
       sync_back: true
       generated_paths: 'README.md'
 
+  # Both downstream jobs carry their own condition: GitHub skips a job whose ANCESTOR was skipped,
+  # so without one the skipped merge on a gh-v tag would silently skip the publish too.
   test:
     needs: merge
     if: ${{ always() && needs.merge.result != 'failure' && needs.merge.result != 'cancelled' }}
@@ -37,6 +39,7 @@ jobs:
 
   publish:
     needs: test
+    if: ${{ always() && needs.test.result == 'success' }}
     uses: intisy/workflows/.github/workflows/publish.yml@main
     with:
       tag: ${{ inputs.tag }}
