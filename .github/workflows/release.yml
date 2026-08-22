@@ -44,6 +44,7 @@ jobs:
       require_clean_readme: true
       unscoped_name: 'plugin-host'
       scope: 'intisy-ai'
+      pin_file_deps: true
       targets: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') && 'none' || '' }}
       prerelease: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') }}
       npm_pack: ${{ startsWith(inputs.tag || github.ref_name, 'gh-v') }}
